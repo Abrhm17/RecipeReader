@@ -5,8 +5,6 @@ using System.Text.RegularExpressions;
 
 namespace RecipeReader
 {
-    public enum ReadingRule { DEFAULT, SEQUENCE, SHALLOW }
-
     class Program
     {
        static XmlDocument doc = new XmlDocument();
@@ -14,65 +12,33 @@ namespace RecipeReader
         static void Main(string[] args)
         {
             BuildXml();
-
-
         }
         public static void BuildXml()
         {
 
             XmlNode rootNode = doc.CreateElement("Recipe");
             var allText = File.ReadAllText(@"C:\Users\abrhm\source\repos\RecipeReader\RecipeReader\1_LemonCake.txt");
+            NodeRepresentation header =  new NodeRepresentation("Header", @"\d\.", null, ReadingRule.HEADER);
+
             NodeRepresentation[] ingredients = { new NodeRepresentation("Ingredient", @"\n", null) };
             NodeRepresentation[] steps = { new NodeRepresentation("Step", @"\d\.", null) };
 
-            NodeRepresentation[] categories = { new NodeRepresentation("Ingredients", "Ingredients:", ingredients), new NodeRepresentation("Method", "Method:", steps) };
-            BuildNode(doc, rootNode, categories, allText);
-
-            var first = allText.Split("]");
-             
-            var test = GetMiddleString("FALALALALALALALADAH", "FA", "DAH");
-            var ing = GetMiddleString(allText, "Ingredients:", "Method:");
-            var ingred = Regex.Split(ing, @"\n");
-            var metadata = first[0];
-            var number = metadata.Split(".")[0]; 
-            var afterNumber = metadata.Split(".")[1];
-            var afterBracket = afterNumber.Split("[");
-            var date = afterBracket[1];
-            var title = afterBracket[0].Trim();
-            var second = first[1].Split("Ingredients:");
-            var leader = second[0];
-            var third = second[1].Split("Method:");
-            var stepz = Regex.Split(third[1], @"\d\.");
-            var recipes = Regex.Split(third[0], @"\n");
-
-            //    if(Children == null || Children.Length == 0)
-            //    {
-            //        return parentNode;
-            //    }
-            //    int index = 0;
-            //    while (index < Children.Length)
-            //    {
-            //        text = text.Split(Children[index].XmlDisplayName)[1];
-            //       var inner text = text.Split(Children[index].XmlDisplayName)[1];
-
-            //        index++;
-            //    }
-
-            //    return null;
-            //}
-          //   XmlDocument doc = new XmlDocument();
-          //  XmlNode rootNode = doc.CreateElement("Recipe");
-          //  XmlModel recipeRoot = new RecipeRoot();
-          //  recipeRoot.BuildXml(rootNode, allText);
-          
+            NodeRepresentation[] categories = { header, new NodeRepresentation("Ingredients", "Ingredients:", ingredients), new NodeRepresentation("Method", "Method:", steps) };
+            BuildNode(rootNode, categories, allText);
+            doc.AppendChild(rootNode);
+            doc.Save(@"C:\Users\abrhm\source\repos\RecipeReader\RecipeReader\EncodedRecipe.xml");
         }
 
-        public static void BuildNode(XmlDocument doc, XmlNode node, NodeRepresentation[] descendents, string text)
+        public static void BuildNode(XmlNode node, NodeRepresentation[] descendents, string text)
         {
 
             for(int i = 0; i < descendents.Length; i++)
             {
-
+                if (descendents[i].Rule == ReadingRule.HEADER)
+                {
+                    BuildHeaderNode(text, descendents[i], node);
+                    continue;
+                }
                 if ( (descendents[i].Items != null && descendents[i].Rule == ReadingRule.DEFAULT) || descendents[i].Rule == ReadingRule.SEQUENCE )
                 {
                     BuildNodeFromSequence(text, i, descendents, node);
@@ -80,13 +46,35 @@ namespace RecipeReader
                 if ((descendents[i].Items == null && descendents[i].Rule == ReadingRule.DEFAULT) || descendents[i].Rule == ReadingRule.SHALLOW)
                 {
                     BuildShallowNode(text, descendents[i], node);
-                    return;
+            
                 }
      
-                // rootNode.AppendChild(BuildXml(categories[i].Items, nodeText));
             }
 
         }
+
+        private static void BuildHeaderNode(string text, NodeRepresentation nodeRep, XmlNode parentNode)
+        {
+            var pattern = @"(\d)\.(.+)\[(.+)\].+";
+
+            var match = Regex.Match(text, pattern);
+            var recipeNumber = match.Groups[1].Value;
+            var recipeTitle = match.Groups[2].Value.Trim();
+            var datePosted = match.Groups[3].Value;
+
+            XmlNode newNode = doc.CreateElement(nodeRep.XmlName);
+            XmlNode numberNode = doc.CreateElement("RecipeNumber");
+            numberNode.InnerText = recipeNumber;
+            XmlNode titleNode = doc.CreateElement("Title");
+            titleNode.InnerText = recipeTitle;
+            XmlNode dateNode = doc.CreateElement("Date");
+            dateNode.InnerText = datePosted;
+            newNode.AppendChild(numberNode);
+            newNode.AppendChild(titleNode);
+            newNode.AppendChild(dateNode);
+            parentNode.AppendChild(newNode);
+        }
+
 
         private static void BuildNodeFromSequence(string text, int index, NodeRepresentation[] categories, XmlNode parentNode)
         {
@@ -98,7 +86,7 @@ namespace RecipeReader
             var nodeText = GetMiddleString(text, categories[index].StartSeparator, endSeparator);
             XmlNode newNode = doc.CreateElement(categories[index].XmlName);
 
-            BuildNode(doc, newNode, categories[index].Items, nodeText);
+            BuildNode(newNode, categories[index].Items, nodeText);
             parentNode.AppendChild(newNode);
         }
 
@@ -117,7 +105,7 @@ namespace RecipeReader
             }
         }
 
-        public static string GetMiddleString(string firstString, string separator1, string separator2)
+        private static string GetMiddleString(string firstString, string separator1, string separator2)
         {
             int pFrom = firstString.IndexOf(separator1) + separator1.Length;
             int pTo = firstString.LastIndexOf(separator2);
@@ -126,21 +114,4 @@ namespace RecipeReader
         }
     }
 
-    public class NodeRepresentation
-    {
-        public string XmlName { get; set; }
-
-        public string StartSeparator { get; set; }
-
-        public ReadingRule Rule {get; set;}
-
-        public NodeRepresentation[] Items { get; set; }
-
-        public NodeRepresentation(string XmlName, string StartSeparator, NodeRepresentation[] Items)
-        {
-            this.XmlName = XmlName;
-            this.StartSeparator = StartSeparator;
-            this.Items = Items;
-        }
-    }
 }
